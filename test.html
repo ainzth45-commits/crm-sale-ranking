@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบเสียง — SALE ARENA</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Kanit',sans-serif;background:#150f2e;color:#fff;padding:18px 16px 60px}
+  h1{font-size:1.6rem;margin:0 0 4px}
+  .sub{color:#a99bd0;font-size:.9rem;margin-bottom:16px}
+  .ctrl{position:sticky;top:0;background:#150f2e;padding:12px 0;z-index:5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #33285a;margin-bottom:14px}
+  button{font-family:'Kanit';cursor:pointer;border:none;border-radius:10px;font-weight:600}
+  .gbtn{padding:8px 16px;font-size:1rem;background:#2c2150;color:#cfc3f0;border:2px solid transparent}
+  .gbtn.active{background:#ffd700;color:#3a2400;border-color:#fff}
+  #stop{padding:8px 16px;background:#ff5a7a;color:#fff}
+  #now{color:#2bff9a;font-weight:600;font-size:.95rem}
+  .cat{margin:18px 0 8px;font-size:1.15rem;font-weight:700;color:#ffd700}
+  .cat small{color:#a99bd0;font-weight:400;font-size:.8rem}
+  .row{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;background:#1f1840;margin-bottom:6px;transition:background .15s;cursor:pointer;user-select:none}
+  .row:hover{background:#2a2152}
+  .row:active{transform:scale(.995)}
+  .row.playing{background:#3a2e6b;outline:2px solid #ffd700}
+  .play{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:#ffd700;color:#3a2400;font-size:1rem;display:grid;place-items:center;cursor:pointer;transition:transform .1s,box-shadow .1s}
+  .row:hover .play{transform:scale(1.12);box-shadow:0 0 12px rgba(255,215,0,.7)}
+  .play:active{transform:scale(.95)}
+  .txt{flex:1;font-size:1.02rem;line-height:1.35}
+  .idx{flex:0 0 auto;color:#7d6fb0;font-size:.85rem;width:34px;text-align:right}
+  .catbtns{display:flex;gap:8px;margin:4px 0 6px}
+  .catbtns button{padding:5px 12px;font-size:.85rem;background:#2c2150;color:#cfc3f0}
+</style>
+</head>
+<body>
+<h1>🔊 ทดสอบเสียง SALE ARENA</h1>
+<div class="sub">กดปุ่ม ▶ เพื่อฟังเสียงแต่ละข้อ · สลับเพศเสียงได้ · ดึงข้อความสดจาก Supabase</div>
+
+<div class="ctrl">
+  <span>เพศเสียง:</span>
+  <button class="gbtn active" id="gF">👩 หญิง (Premwadee)</button>
+  <button class="gbtn" id="gM">👨 ชาย (Niwat)</button>
+  <button id="stop">■ หยุด</button>
+  <span id="now"></span>
+</div>
+
+<div id="list">กำลังโหลด...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL='https://swbxecjguiohpwllvues.supabase.co', SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3YnhlY2pndWlvaHB3bGx2dWVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODY3MjUsImV4cCI6MjA5NjE2MjcyNX0.8j9wgyt-tvloBmANuFPJYK2bJCWd_oMWnBhVvZY2NL4';
+const sb = supabase.createClient(SB_URL, SB_ANON);
+const TTS_URL = SB_URL + '/functions/v1/tts';
+const $ = id => document.getElementById(id);
+
+let gender = 'f';   // f / m
+$('gF').onclick = () => { gender='f'; $('gF').classList.add('active'); $('gM').classList.remove('active'); };
+$('gM').onclick = () => { gender='m'; $('gM').classList.add('active'); $('gF').classList.remove('active'); };
+
+function renderToken(t){ return String(t).replace(/\{ญ:([^|]*)\|([^}]*)\}/g, (m,f,mm)=> gender==='m'?mm:f); }
+
+let cur = null, curRow = null, seqActive = false;
+function stop(){ if(cur){cur.pause();cur=null;} if(window.speechSynthesis) speechSynthesis.cancel(); if(curRow){curRow.classList.remove('playing');curRow=null;} seqActive=false; $('now').textContent=''; }
+$('stop').onclick = stop;
+
+function play(text, row, onDone){ stop(); _playOne(text, row, onDone); }
+function _playOne(text, row, onDone){
+  const t = renderToken(text);
+  curRow = row; if(row) row.classList.add('playing');
+  $('now').textContent = '⏳ กำลังโหลดเสียง...';
+  tryAudio(t, row, 0, onDone);
+}
+// เล่นจาก Edge Function + retry สูงสุด 2 ครั้ง → ถ้ายังพลาด fallback Web Speech
+function tryAudio(t, row, attempt, onDone){
+  const a = new Audio(TTS_URL + '?g=' + gender + '&text=' + encodeURIComponent(t));
+  cur = a;
+  const finish = () => { if(cur===a){ if(row) row.classList.remove('playing'); $('now').textContent=''; cur=null; } if(onDone) onDone(); };
+  a.addEventListener('playing', () => { if(cur===a) $('now').textContent = '🔊 ' + t; });
+  a.addEventListener('ended', finish);
+  a.addEventListener('error', () => {
+    if(cur!==a) return;
+    if(attempt < 2){ $('now').textContent = '⏳ โหลดใหม่...'; setTimeout(() => { if(cur===a) tryAudio(t, row, attempt+1, onDone); }, 500); }
+    else webSpeak(t, row, onDone);          // edge-tts ล่ม → สำรอง
+  });
+  a.play().catch(() => { if(cur===a) webSpeak(t, row, onDone); });  // autoplay บล็อก → สำรอง
+}
+// สำรอง: เสียงเบราว์เซอร์ (Web Speech) — ไม่เพราะเท่า แต่ได้ยินเสมอ
+function webSpeak(t, row, onDone){
+  const done = () => { if(row) row.classList.remove('playing'); $('now').textContent=''; if(onDone) onDone(); };
+  try {
+    if(!('speechSynthesis' in window)) return done();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = 'th-TH';
+    const vs = speechSynthesis.getVoices().filter(v => (v.lang||'').toLowerCase().startsWith('th'));
+    if(vs.length) u.voice = vs[0];
+    u.onend = u.onerror = done;
+    $('now').textContent = '🔊 (เสียงสำรอง) ' + t;
+    speechSynthesis.speak(u);
+  } catch(e){ done(); }
+}
+
+// เล่นต่อเนื่องทั้งหมวด
+function playAll(items){
+  stop(); seqActive = true; let i = 0;
+  const next = () => {
+    if(!seqActive || i >= items.length){ stop(); return; }
+    const it = items[i++];
+    it.row.scrollIntoView({block:'center',behavior:'smooth'});
+    _playOne(it.text, it.row, () => { if(seqActive) next(); });   // ได้ retry + fallback ต่อข้อด้วย
+  };
+  next();
+}
+
+const CATS = [
+  ['periodic','⏰ ทุกครึ่งชั่วโมง'],
+  ['newLeader','👑 ผู้นำคนใหม่'],
+  ['dethrone','⚔️ โค่นแชมป์ครองนาน'],
+  ['bigOrderNo1','🚀 บิลเดียวเด้งขึ้นที่ 1'],
+  ['bigOrderOther','🔥 บิลใหญ่แต่ไม่แซง']
+];
+
+(async () => {
+  const { data, error } = await sb.from('taunts').select('category,text').order('id');
+  if(error){ $('list').textContent = 'โหลดไม่สำเร็จ: ' + error.message; return; }
+  const g = {};
+  (data||[]).forEach(r => { (g[r.category]=g[r.category]||[]).push(r.text); });
+  const list = $('list'); list.innerHTML = '';
+  CATS.forEach(([cat,label]) => {
+    const arr = g[cat] || [];
+    const h = document.createElement('div'); h.className='cat';
+    h.innerHTML = label + ' <small>(' + arr.length + ' ข้อ)</small>';
+    list.appendChild(h);
+    const items = [];
+    const cb = document.createElement('div'); cb.className='catbtns';
+    const allBtn = document.createElement('button'); allBtn.textContent='▶ เล่นทั้งหมวด';
+    cb.appendChild(allBtn); list.appendChild(cb);
+    arr.forEach((text,i) => {
+      const row = document.createElement('div'); row.className='row';
+      row.innerHTML = '<div class="play">▶</div><div class="idx">'+(i+1)+'</div><div class="txt"></div>';
+      row.querySelector('.txt').textContent = text;
+      row.onclick = () => play(text, row);
+      list.appendChild(row);
+      items.push({text,row});
+    });
+    allBtn.onclick = () => playAll(items);
+  });
+})();
+</script>
+</body>
+</html>

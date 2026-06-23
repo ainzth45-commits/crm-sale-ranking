@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SALE RANKING — Real-time Scoreboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #ffd700;
+      --bg-dark: #150f2e;
+      --card-bg: rgba(255, 255, 255, 0.08);
+      --rank1-gradient: linear-gradient(135deg, #f7c948, #e0651a);
+      --text-green: #2bff9a;
+      --gold-glow: 0 0 22px rgba(255, 215, 0, 0.55);
+    }
+    *{box-sizing:border-box}
+    body, html {
+      margin:0; padding:0; width:100vw; height:100vh; overflow:hidden;
+      background: radial-gradient(120% 90% at 50% 0%, #2a1b54 0%, var(--bg-dark) 55%, #0e0a22 100%);
+      color:white; font-family:'Kanit',sans-serif;
+    }
+    /* ── glow ambience (ตกแต่ง) ── */
+    body::before, body::after{content:''; position:fixed; border-radius:50%; filter:blur(70px); z-index:0; opacity:.5}
+    body::before{width:42vh; height:42vh; left:-10vh; bottom:-10vh; background:#6a2cc9}
+    body::after {width:46vh; height:46vh; right:-12vh; top:-12vh; background:#c92c7a}
+
+    #overlay {
+      position:fixed; inset:0; background:var(--bg-dark);
+      display:flex; justify-content:center; align-items:center; z-index:1000; transition:.5s;
+    }
+    #startBtn {
+      padding:2vh 5vw; font-size:4vh; font-family:'Kanit'; font-weight:bold;
+      background:var(--rank1-gradient); border:none; border-radius:50px; color:white; cursor:pointer;
+      box-shadow:0 0 30px rgba(255,215,0,.4); animation:pulseBtn 1.6s ease-in-out infinite;
+    }
+    @keyframes pulseBtn{50%{transform:scale(1.05)}}
+
+    /* ── header (ตกแต่งเพิ่ม) ── */
+    .topbar{position:absolute; top:2vh; left:3vw; right:3vw; display:flex; align-items:center; justify-content:space-between; z-index:5}
+    .brand{display:flex; align-items:center; gap:1.2vw; font-size:4.2vh; font-weight:800;
+      background:linear-gradient(180deg,#fff,#ffd700); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+      filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+    .live{display:flex; align-items:center; gap:.6vw; font-size:2.4vh; font-weight:700; color:#fff;
+      background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.2); padding:.4vh 1.4vw; border-radius:30px}
+    .live .dot{width:1.3vh; height:1.3vh; border-radius:50%; background:#ff3b3b; box-shadow:0 0 10px #ff3b3b; animation:pulse 1.3s infinite}
+    @keyframes pulse{50%{opacity:.3}}
+    .floating-timer{font-size:4.6vh; font-weight:800; color:var(--primary-color); text-shadow:0 0 14px rgba(255,215,0,.4); line-height:1}
+    .timer-label{font-size:1.7vh; font-weight:500; opacity:.85; text-align:right}
+
+    .container {
+      width:100vw; height:56.25vw; max-height:100vh; max-width:177.78vh;
+      margin:auto; position:absolute; inset:0; display:none; z-index:2;
+      padding:9.5vh 2vw 2vh 2vw; gap:2vw;
+    }
+    .left-panel { flex:6; display:flex; flex-direction:column; height:100%; gap:2vh; }
+    .right-panel { flex:4; display:flex; flex-direction:column; height:100%; overflow:hidden; }
+
+    .box-winner-left { border:0.5vh solid var(--primary-color) !important; box-shadow:var(--gold-glow) !important; }
+
+    .rank-1-box {
+      height:55%; background:var(--rank1-gradient); border-radius:3vh;
+      display:flex; align-items:center; padding:0 4vw; gap:3vw;
+      transition:all .4s ease; border:0.5vh solid transparent; box-sizing:border-box; position:relative;
+      box-shadow:0 1.5vh 4vh rgba(0,0,0,.45), inset 0 .4vh 1.6vh rgba(255,255,255,.45);
+    }
+    .rank-1-box::after{content:''; position:absolute; inset:0; border-radius:3vh; box-shadow:0 0 50px rgba(255,200,60,.35); animation:glow1 2.4s ease-in-out infinite; pointer-events:none}
+    @keyframes glow1{50%{box-shadow:0 0 78px rgba(255,200,60,.6)}}
+    .rank-1-box .profile-container { height:75%; aspect-ratio:1/1; position:relative; }
+    .rank-1-box img.profile { height:100%; width:100%; border-radius:50%; border:1vh solid rgba(255,255,255,.35); object-fit:cover; }
+    .rank-1-info{position:relative; z-index:2}
+    .rank-1-info .sales { font-size:12vh; font-weight:800; color:var(--text-green); text-shadow:0 0 25px rgba(0,0,0,.6); line-height:1; margin:1vh 0; }
+    .overlay-image { position:absolute; top:-15%; left:50%; transform:translateX(-50%); width:22%; z-index:10; filter:drop-shadow(0 0 10px rgba(0,0,0,.5)); }
+
+    @keyframes shake-animation {
+      0%{transform:translate(0,0) rotate(0)} 25%{transform:translate(2px,2px) rotate(3deg)}
+      50%{transform:translate(-2px,-2px) rotate(0)} 75%{transform:translate(2px,-2px) rotate(-3deg)} 100%{transform:translate(0,0) rotate(0)}
+    }
+    .shake-active { animation:shake-animation .2s ease-in-out infinite !important; }
+
+    .rank-2-3-container { flex-grow:1; display:flex; gap:2vw; height:40%; }
+    .rank-minor { flex:1; background:var(--card-bg); border-radius:3vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:1vh; border:0.2vh solid rgba(255,255,255,.12); transition:all .4s ease; overflow:hidden;
+      box-shadow:0 1vh 2.5vh rgba(0,0,0,.35), inset 0 .3vh 1vh rgba(255,255,255,.06); }
+    .rank-minor .profile-container { height:50%; aspect-ratio:1/1; position:relative; margin-bottom:1vh; }
+    .rank-minor img.profile { height:100%; width:100%; border-radius:50%; object-fit:cover; border:0.4vh solid rgba(255,255,255,.2); }
+    .rank-minor .minor-sales { font-size:4.8vh; font-weight:800; color:var(--text-green); line-height:1; }
+    .scrollable-ranks { overflow-y:auto; height:100%; display:flex; flex-direction:column; }
+    .scrollable-ranks::-webkit-scrollbar { width:0; }
+    .rank-item-small { display:flex; align-items:center; gap:1.5vw; background:rgba(255,255,255,.08); margin-bottom:1vh; padding:0 2vw; border-radius:2vh; transition:all .4s cubic-bezier(.175,.885,.32,1.275); box-sizing:border-box; flex-shrink:0; border:0.3vh solid transparent; }
+    .height-normal { height:12.8%; }
+    .height-winner { height:16.5%; border:0.3vh solid var(--primary-color); background:rgba(255,215,0,.15); box-shadow:var(--gold-glow); }
+    .rank-item-small img.profile { height:75%; aspect-ratio:1/1; border-radius:50%; object-fit:cover; transition:.3s; }
+    .winner-img { height:85% !important; }
+    .info-container { flex:1; display:flex; justify-content:space-between; align-items:center; gap:1vw; }
+    .name-part { font-weight:bold; font-size:2.8vh; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:45%; }
+    .sales-part { display:flex; flex-direction:column; align-items:flex-end; text-align:right; min-width:45%; }
+    .sales-value { color:var(--text-green); font-size:3.5vh; font-weight:800; line-height:1; }
+    .max-bill-value { font-size:1.8vh; color:var(--primary-color); font-weight:500; margin-top:.5vh; }
+    .star-icon { position:absolute; bottom:-5%; right:-5%; color:var(--primary-color); font-size:4.5vh; text-shadow:0 0 12px rgba(0,0,0,.6); }
+    .highlight-yellow { color:var(--primary-color) !important; font-weight:bold; }
+
+    /* ════════ ลูกเล่นเพิ่ม ════════ */
+    /* 1) particle ลอยขึ้น */
+    #particles{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+    .pt{position:absolute; bottom:-6vh; border-radius:50%; background:radial-gradient(circle,#ffe79a,rgba(255,215,0,0)); animation:rise linear infinite}
+    @keyframes rise{from{transform:translateY(0) translateX(0); opacity:.7} to{transform:translateY(-112vh) translateX(var(--dx,0)); opacity:0}}
+    /* 2) shine sweep การ์ดอันดับ 1 */
+    .rank-1-box{overflow:hidden}
+    .rank-1-box .shine{position:absolute; top:0; left:-60%; width:38%; height:100%; z-index:3; pointer-events:none;
+      background:linear-gradient(105deg,transparent,rgba(255,255,255,.55),transparent); transform:skewX(-18deg); animation:sweep 4.5s ease-in-out infinite}
+    @keyframes sweep{0%,62%{left:-60%} 88%,100%{left:135%}}
+    /* 3) sparkles รอบรูป #1 */
+    .spark{position:absolute; color:#fff; font-size:3vh; text-shadow:0 0 8px #ffd700; animation:twinkle 1.7s ease-in-out infinite; pointer-events:none; z-index:11}
+    @keyframes twinkle{0%,100%{transform:scale(.4); opacity:.2} 50%{transform:scale(1.15); opacity:1}}
+    /* 4) crown bounce */
+    .overlay-image{animation:crownB 2s ease-in-out infinite}
+    @keyframes crownB{0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-14%)}}
+    /* 5) progress bar */
+    .rank-item-small{position:relative}
+    .pbar{height:.8vh; background:rgba(255,255,255,.14); border-radius:1vh; overflow:hidden}
+    .pbar > i{display:block; height:100%; border-radius:1vh; background:linear-gradient(90deg,#2bff9a,#ffd700); transition:width .8s cubic-bezier(.4,0,.2,1)}
+    .row-pbar{position:absolute; left:2vw; right:2vw; bottom:.5vh}
+    /* 6) rank movement ▲▼ */
+    .delta{font-size:1.8vh; font-weight:800; margin-left:.4vw; animation:fadeDelta 6s forwards; display:inline-block}
+    .delta.up{color:#2bff9a} .delta.down{color:#ff6b6b}
+    @keyframes fadeDelta{0%,55%{opacity:1} 100%{opacity:0}}
+    /* 7) NEW LEADER banner */
+    #newleader{position:fixed; top:40%; left:50%; transform:translate(-50%,-50%); z-index:1500; opacity:0; pointer-events:none;
+      background:var(--rank1-gradient); color:#fff; font-size:4.6vh; font-weight:800; padding:2vh 4vw; border-radius:3vh;
+      box-shadow:0 0 70px rgba(255,215,0,.75); text-shadow:0 .4vh .6vh rgba(0,0,0,.4); white-space:nowrap; text-align:center}
+    #newleader.show{animation:nl 3.4s ease forwards}
+    @keyframes nl{0%{opacity:0; transform:translate(-50%,-50%) scale(.5)} 14%{opacity:1; transform:translate(-50%,-50%) scale(1.1)} 26%{transform:translate(-50%,-50%) scale(1)} 82%{opacity:1} 100%{opacity:0}}
+    /* 8) confetti */
+    #confetti{position:fixed; inset:0; z-index:1400; pointer-events:none; overflow:hidden}
+    .cfp{position:absolute; width:1.1vh; height:1.7vh; top:-3vh; animation:fall linear forwards}
+    @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+  </style>
+</head>
+<body>
+
+  <div id="overlay"><button id="startBtn" onclick="activateApp()">🏆 เปิดใช้งาน</button></div>
+
+  <div class="topbar">
+    <div class="brand">🏆 SALE RANKING</div>
+    <div class="floating-timer" id="timer">00:00:00</div>
+  </div>
+
+  <div class="container" id="app"></div>
+  <div id="particles"></div>
+  <div id="confetti"></div>
+  <div id="newleader"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SB_URL='https://swbxecjguiohpwllvues.supabase.co', SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3YnhlY2pndWlvaHB3bGx2dWVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODY3MjUsImV4cCI6MjA5NjE2MjcyNX0.8j9wgyt-tvloBmANuFPJYK2bJCWd_oMWnBhVvZY2NL4';
+    const sb = supabase.createClient(SB_URL, SB_ANON);
+
+    let currentRank1Name = "";
+    let currentRank1Id = "";
+    let currentRank1Gender = "female";
+    let rank1SinceMs = 0;
+    let isShaking = false;
+    let lastKey = "";
+    let prevRanks = {};
+    let prevMaxBill = 0;
+
+    /* ═══════ เครื่องยนต์เสียงพากย์ (Edge Function tts) ═══════ */
+    const TTS_URL = SB_URL + '/functions/v1/tts';
+    let audioUnlocked = false, speakQueue = [], speaking = false;
+    // โทเคน {ญ:หญิง|ชาย} → เลือกตามเพศคนพูด
+    function renderToken(t, gender){ return String(t).replace(/\{ญ:([^|]*)\|([^}]*)\}/g, (m,f,mm)=> gender==='male'?mm:f); }
+    function speak(text, gender){
+      if(!audioUnlocked || !text) return;
+      speakQueue.push({ t: renderToken(text, gender), g: gender==='male'?'m':'f' });
+      if(speakQueue.length > 2) speakQueue = speakQueue.slice(-2);   // drop-stale: เก็บล่าสุด 2
+      if(!speaking) playNext();
+    }
+    function playNext(){
+      if(!speakQueue.length){ speaking=false; return; }
+      speaking=true;
+      const it = speakQueue.shift();
+      tryAudio(it.t, it.g, 0);
+    }
+    // เล่นจาก Edge Function + retry สูงสุด 2 ครั้ง → ถ้ายังพลาด fallback Web Speech → จบแล้วเล่นคิวถัดไป
+    let curAudio = null;
+    function tryAudio(t, g, attempt){
+      const a = new Audio(TTS_URL + '?g=' + g + '&text=' + encodeURIComponent(t));
+      curAudio = a;
+      a.addEventListener('ended', () => { if(curAudio===a) playNext(); });
+      a.addEventListener('error', () => {
+        if(curAudio!==a) return;
+        if(attempt < 2){ setTimeout(() => { if(curAudio===a) tryAudio(t, g, attempt+1); }, 500); }
+        else webSpeak(t, g);            // edge-tts ล่ม → สำรอง
+      });
+      a.play().catch(() => { if(curAudio===a) webSpeak(t, g); });  // autoplay บล็อก → สำรอง
+    }
+    // สำรอง: เสียงเบราว์เซอร์ (Web Speech) — ไม่เพราะเท่า แต่ได้ยินเสมอ
+    function webSpeak(t, g){
+      try {
+        if(!('speechSynthesis' in window)) return playNext();
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(t);
+        u.lang = 'th-TH';
+        const vs = speechSynthesis.getVoices().filter(v => (v.lang||'').toLowerCase().startsWith('th'));
+        if(vs.length) u.voice = vs[g==='m' && vs.length>1 ? 1 : 0];
+        u.onend = u.onerror = () => playNext();
+        speechSynthesis.speak(u);
+      } catch(e){ playNext(); }
+    }
+    // ── คลังข้อความดึงจาก Supabase (ตาราง taunts) + shuffle-bag กันเสียงซ้ำเร็ว ──
+    let TAUNTS = {};            // {category: [text,...]} โหลดจาก DB
+    const bags = {}, lastPlayed = {};
+    function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+    // shuffle-bag: สับทั้งกอง เล่นจนครบก่อนสับใหม่ → ไม่ซ้ำจนกว่าจะวนครบ
+    function pick(cat){
+      const pool = TAUNTS[cat] || [];
+      if(!pool.length) return '';
+      if(!bags[cat] || !bags[cat].length){
+        bags[cat] = shuffle(pool);
+        if(bags[cat].length > 1 && bags[cat][0] === lastPlayed[cat]) bags[cat].push(bags[cat].shift()); // กันซ้ำคาบเกี่ยวรอบ
+      }
+      const t = bags[cat].shift();
+      lastPlayed[cat] = t;
+      return t;
+    }
+    async function loadTaunts(){
+      const { data, error } = await sb.from('taunts').select('category,text');  // RLS คืนเฉพาะ active
+      if(error){ console.error('taunts:', error); return; }
+      const g = {};
+      (data||[]).forEach(r => { (g[r.category] = g[r.category] || []).push(r.text); });
+      TAUNTS = g;
+      for(const k in bags) delete bags[k];   // reset shuffle-bag เมื่อคลังเปลี่ยน
+      console.log('taunts loaded:', Object.fromEntries(Object.entries(g).map(([k,v])=>[k,v.length])));
+    }
+
+    function deltaHtml(name, ranking){
+      const prev = prevRanks[name];
+      if(prev==null || prev===ranking) return '';
+      return prev>ranking ? `<span class="delta up">▲${prev-ranking}</span>` : `<span class="delta down">▼${ranking-prev}</span>`;
+    }
+    function makeParticles(){
+      const c=document.getElementById('particles'); if(!c||c.childElementCount) return;
+      for(let i=0;i<26;i++){ const p=document.createElement('div'); p.className='pt';
+        const s=Math.random()*1.6+0.6; p.style.width=s+'vh'; p.style.height=s+'vh';
+        p.style.left=Math.random()*100+'vw'; p.style.setProperty('--dx',(Math.random()*16-8)+'vw');
+        p.style.animationDuration=(Math.random()*10+10)+'s'; p.style.animationDelay=(-Math.random()*16)+'s';
+        c.appendChild(p);
+      }
+    }
+    function confettiBurst(){
+      const c=document.getElementById('confetti'); if(!c) return;
+      const colors=['#ffd700','#2bff9a','#ff6b9d','#5b9dff','#ff8f3c','#ffffff'];
+      for(let i=0;i<70;i++){ const p=document.createElement('div'); p.className='cfp';
+        p.style.left=Math.random()*100+'vw'; p.style.background=colors[i%colors.length];
+        p.style.animationDuration=(Math.random()*1.6+2)+'s'; p.style.animationDelay=(Math.random()*0.5)+'s';
+        if(Math.random()<.4) p.style.borderRadius='50%';
+        c.appendChild(p); setTimeout(()=>p.remove(),4200);
+      }
+    }
+    function showNewLeader(name){
+      const b=document.getElementById('newleader'); if(!b) return;
+      b.textContent='👑 ผู้นำคนใหม่: '+name+'!';
+      b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    }
+
+    function activateApp() {
+      audioUnlocked = true;  // คลิกนี้คือ gesture ปลดล็อก autoplay
+      loadTaunts();          // โหลดคลังข้อความจาก DB
+      speak('ยินดีต้อนรับสู่สนามแข่งยอดขาย เริ่มกันเลยค่ะ', 'female');  // เสียงต้อนรับ (เทสว่าเสียงทำงาน)
+      document.getElementById('overlay').style.opacity = '0';
+      setTimeout(() => {
+        document.getElementById('overlay').style.display = 'none';
+        document.querySelector('.container').style.display = 'flex';
+        makeParticles();
+        loadData();
+      }, 500);
+      setInterval(startTimer, 1000);
+      setInterval(loadData, 8000);                 // poll สำรอง
+      sb.channel('rank').on('postgres_changes',{event:'INSERT',schema:'public',table:'sales'},loadData).subscribe();
+    }
+
+    async function loadData() {
+      const { data, error } = await sb.rpc('arena_today');
+      if (error) { console.error(error); return; }
+      const rows = (data||[]).map((p,i)=>({
+        ranking:i+1, id:p.employee_id, img:p.photo_url, name:(p.name||'').split(' ')[0], sales:Number(p.sales), maxBill:Number(p.max_order), gender:p.gender
+      }));
+      renderBoard(rows);
+    }
+
+    function renderBoard(data) {
+      if (!data || data.length === 0) return;
+      const key = JSON.stringify(data);
+      if (key === lastKey) return;                 // ไม่เปลี่ยน → ไม่ render ใหม่ (ไม่กระพริบ)
+      lastKey = key;
+
+      const scrollElement = document.querySelector('.scrollable-ranks');
+      const currentScrollPos = scrollElement ? scrollElement.scrollTop : 0;
+      const r1 = data[0];
+      const g = r1.gender || 'female';                    // เพศ = อันดับ 1 (คนพูด)
+      const maxBillValue = Math.max(...data.map(o => Number(o.maxBill) || 0));
+      const bigOrderNew = (prevMaxBill > 0 && maxBillValue > prevMaxBill);
+      const bigOwner = bigOrderNew ? data.find(d => Number(d.maxBill) === maxBillValue) : null;
+      const leaderChanged = (currentRank1Id !== "" && currentRank1Id !== r1.id);
+      if (!rank1SinceMs) rank1SinceMs = Date.now();        // init ครั้งแรก
+
+      if (leaderChanged) {
+        confettiBurst(); showNewLeader(r1.name);
+        const reignedHrs = (Date.now() - rank1SinceMs) / 3600000;
+        if (bigOrderNew && bigOwner && bigOwner.id === r1.id) {
+          speak(pick('bigOrderNo1'), g);              // บิลเดียวเด้งขึ้นที่ 1 → ไม่เล่น newLeader ซ้ำ
+        } else if (reignedHrs >= 2) {
+          speak(pick('dethrone'), g);                 // โค่นแชมป์ที่ครองนานเกิน 2 ชม.
+        } else {
+          speak(pick('newLeader'), g);                // ผู้นำคนใหม่ทั่วไป
+        }
+        rank1SinceMs = Date.now();
+      } else if (bigOrderNew) {
+        speak(pick('bigOrderOther'), g);              // บิลใหญ่แต่ไม่แซงที่ 1
+      }
+      prevMaxBill = maxBillValue;
+      currentRank1Id = r1.id;
+      currentRank1Name = r1.name;
+      currentRank1Gender = g;
+
+      const app = document.getElementById('app');
+      const rank1 = data[0], rank2 = data[1] || {}, rank3 = data[2] || {}, others = data.slice(3);
+      const maxSales = Number(rank1.sales) || 1;
+      const shakeClass = isShaking ? "shake-active" : "";
+
+      app.innerHTML = `
+        <div class="left-panel">
+          <div class="rank-1-box ${Number(rank1.maxBill) === maxBillValue ? 'box-winner-left' : ''}">
+            <div class="shine"></div>
+            <div class="profile-container ${shakeClass}">
+              <img src="https://lh3.googleusercontent.com/d/1e7vK5zLUP4k-N13d5fB54o91e3ps_1K0" class="overlay-image">
+              <img src="${rank1.img}" class="profile">
+              <div class="spark" style="top:-2%;left:-4%">✦</div>
+              <div class="spark" style="top:12%;right:-6%;animation-delay:.5s">✨</div>
+              <div class="spark" style="bottom:6%;left:-7%;animation-delay:.9s">✦</div>
+              ${Number(rank1.maxBill) === maxBillValue ? '<div class="star-icon">✦</div>' : ''}
+            </div>
+            <div class="rank-1-info">
+              <div style="font-size:4vh; font-weight:bold;">อันดับ ${rank1.ranking} ${deltaHtml(rank1.name, rank1.ranking)}</div>
+              <div style="font-size:8vh; font-weight:800; white-space:nowrap; line-height:1.1;">${rank1.name}</div>
+              <div class="sales">${rank1.sales.toLocaleString()}</div>
+              <div style="font-size:4vh;" class="${Number(rank1.maxBill) === maxBillValue ? 'highlight-yellow' : ''}">
+                ยอดต่อบิลสูงสุด ${rank1.maxBill.toLocaleString()}
+              </div>
+            </div>
+          </div>
+          <div class="rank-2-3-container">
+            ${renderMinorRank(rank2, maxBillValue)}
+            ${renderMinorRank(rank3, maxBillValue)}
+          </div>
+        </div>
+        <div class="right-panel">
+          <div class="scrollable-ranks">
+            ${others.map(item => {
+              const isTop = Number(item.maxBill) === maxBillValue;
+              return `
+              <div class="rank-item-small ${isTop ? 'height-winner' : 'height-normal'}">
+                <div style="min-width:3vw; font-weight:bold; font-size:2.8vh; color:${isTop ? 'var(--primary-color)' : 'white'};">${item.ranking}${deltaHtml(item.name,item.ranking)}</div>
+                <div class="profile-container" style="height:100%; display:flex; align-items:center; position:relative;">
+                  <img src="${item.img}" class="profile ${isTop ? 'winner-img' : ''}">
+                  ${isTop ? '<div class="star-icon" style="font-size:3.5vh;">✦</div>' : ''}
+                </div>
+                <div class="info-container">
+                  <div class="name-part">${item.name}</div>
+                  <div class="sales-part">
+                    <div class="sales-value">${item.sales.toLocaleString()}</div>
+                    ${isTop ? `<div class="max-bill-value">ยอดต่อบิลสูงสุด ${item.maxBill.toLocaleString()}</div>` : ''}
+                  </div>
+                </div>
+                <div class="row-pbar pbar"><i style="width:${Math.max(3,Math.round(item.sales/maxSales*100))}%"></i></div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      const newScroll = document.querySelector('.scrollable-ranks');
+      if (newScroll) newScroll.scrollTop = currentScrollPos;
+      prevRanks = {}; data.forEach(d => prevRanks[d.name] = d.ranking);  // เก็บอันดับไว้เทียบรอบหน้า
+    }
+
+    function renderMinorRank(item, maxVal) {
+      if (!item.name) return `<div class="rank-minor"></div>`;
+      const isTop = Number(item.maxBill) === maxVal;
+      return `
+        <div class="rank-minor ${isTop ? 'box-winner-left' : ''}">
+          <div style="font-weight:bold; font-size:2.8vh; color:${isTop ? 'var(--primary-color)' : 'white'};">อันดับ ${item.ranking}</div>
+          <div class="profile-container">
+            <img src="${item.img}" class="profile">
+            ${isTop ? '<div class="star-icon">✦</div>' : ''}
+          </div>
+          <div style="font-weight:bold; font-size:3.5vh; margin:.5vh 0; word-break:keep-all; text-align:center;">${item.name}</div>
+          <div class="minor-sales">${item.sales.toLocaleString()}</div>
+          <div style="font-size:2.2vh;" class="${isTop ? 'highlight-yellow' : ''}">ยอดต่อบิลสูงสุด ${item.maxBill.toLocaleString()}</div>
+        </div>`;
+    }
+
+    // shake แยกจาก render → toggle class บน element สดๆ (ไม่ rebuild)
+    function applyShake() {
+      const el = document.querySelector('.rank-1-box .profile-container');
+      if (el) el.classList.toggle('shake-active', isShaking);
+    }
+
+    // นาฬิกานับถอยหลังถึง 18:00 (โชว์เลขอย่างเดียว ไม่มีข้อความ) + รูปอันดับ 1 สั่นทุก :00/:30
+    function startTimer() {
+      const timerEl = document.getElementById('timer');
+      const now = new Date(), end = new Date(); end.setHours(18,0,0,0);
+      let diff = end - now; if (diff < 0) diff = 0;
+      const p = n => String(n).padStart(2,'0');
+      if (timerEl) timerEl.innerText = `${p(Math.floor(diff/3600000))}:${p(Math.floor(diff%3600000/60000))}:${p(Math.floor(diff%60000/1000))}`;
+      if (now.getSeconds() === 0 && (now.getMinutes() === 0 || now.getMinutes() === 30) && !isShaking) {
+        isShaking = true; applyShake();
+        speak(pick('periodic'), currentRank1Gender);   // เยาะเย้ยทุกครึ่งชั่วโมง
+        setTimeout(() => { isShaking = false; applyShake(); }, 15000);
+      }
+    }
+  </script>
+</body>
+</html>
