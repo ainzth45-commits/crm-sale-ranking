@@ -169,6 +169,8 @@
     let audioUnlocked = false, speakQueue = [], speaking = false;
     // โทเคน {ญ:หญิง|ชาย} → เลือกตามเพศคนพูด
     function renderToken(t, gender){ return String(t).replace(/\{ญ:([^|]*)\|([^}]*)\}/g, (m,f,mm)=> gender==='male'?mm:f); }
+    // เว้นวรรคในข้อความ → คอมมา เพื่อให้เสียง neural หยุดเว้นจังหวะตามข้อความ (พิสูจน์แล้วว่าเพิ่มการหยุดจริง)
+    function toSpoken(t){ return String(t).trim().replace(/\s+/g, ', '); }
     function speak(text, gender){
       if(!audioUnlocked || !text) return;
       speakQueue.push({ t: renderToken(text, gender), g: gender==='male'?'m':'f' });
@@ -184,7 +186,7 @@
     // เล่นจาก Edge Function + retry สูงสุด 2 ครั้ง → ถ้ายังพลาด fallback Web Speech → จบแล้วเล่นคิวถัดไป
     let curAudio = null;
     function tryAudio(t, g, attempt){
-      const a = new Audio(TTS_URL + '?g=' + g + '&text=' + encodeURIComponent(t));
+      const a = new Audio(TTS_URL + '?g=' + g + '&text=' + encodeURIComponent(toSpoken(t)));
       curAudio = a;
       a.addEventListener('ended', () => { if(curAudio===a) playNext(); });
       a.addEventListener('error', () => {
@@ -199,7 +201,7 @@
       try {
         if(!('speechSynthesis' in window)) return playNext();
         speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(t);
+        const u = new SpeechSynthesisUtterance(toSpoken(t));
         u.lang = 'th-TH';
         const vs = speechSynthesis.getVoices().filter(v => (v.lang||'').toLowerCase().startsWith('th'));
         if(vs.length) u.voice = vs[g==='m' && vs.length>1 ? 1 : 0];

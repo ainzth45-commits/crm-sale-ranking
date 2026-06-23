@@ -57,6 +57,8 @@ $('gF').onclick = () => { gender='f'; $('gF').classList.add('active'); $('gM').c
 $('gM').onclick = () => { gender='m'; $('gM').classList.add('active'); $('gF').classList.remove('active'); };
 
 function renderToken(t){ return String(t).replace(/\{ญ:([^|]*)\|([^}]*)\}/g, (m,f,mm)=> gender==='m'?mm:f); }
+// เว้นวรรคในข้อความ → คอมมา เพื่อให้เสียง neural หยุดเว้นจังหวะตามข้อความ (ข้อความที่โชว์ยังเหมือนเดิม)
+function toSpoken(t){ return String(t).trim().replace(/\s+/g, ', '); }
 
 let cur = null, curRow = null, seqActive = false;
 function stop(){ if(cur){cur.pause();cur=null;} if(window.speechSynthesis) speechSynthesis.cancel(); if(curRow){curRow.classList.remove('playing');curRow=null;} seqActive=false; $('now').textContent=''; }
@@ -71,7 +73,7 @@ function _playOne(text, row, onDone){
 }
 // เล่นจาก Edge Function + retry สูงสุด 2 ครั้ง → ถ้ายังพลาด fallback Web Speech
 function tryAudio(t, row, attempt, onDone){
-  const a = new Audio(TTS_URL + '?g=' + gender + '&text=' + encodeURIComponent(t));
+  const a = new Audio(TTS_URL + '?g=' + gender + '&text=' + encodeURIComponent(toSpoken(t)));
   cur = a;
   const finish = () => { if(cur===a){ if(row) row.classList.remove('playing'); $('now').textContent=''; cur=null; } if(onDone) onDone(); };
   a.addEventListener('playing', () => { if(cur===a) $('now').textContent = '🔊 ' + t; });
@@ -89,7 +91,7 @@ function webSpeak(t, row, onDone){
   try {
     if(!('speechSynthesis' in window)) return done();
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t);
+    const u = new SpeechSynthesisUtterance(toSpoken(t));
     u.lang = 'th-TH';
     const vs = speechSynthesis.getVoices().filter(v => (v.lang||'').toLowerCase().startsWith('th'));
     if(vs.length) u.voice = vs[0];
