@@ -285,7 +285,7 @@
       const { data, error } = await sb.rpc('arena_today');
       if (error) { console.error(error); return; }
       const rows = (data||[]).map((p,i)=>({
-        ranking:i+1, id:p.employee_id, img:p.photo_url, name:(p.name||'').split(' ')[0], sales:Number(p.sales), maxBill:Number(p.max_order), gender:p.gender
+        ranking:i+1, id:p.employee_id, img:p.photo_url, name:((p.employee_id||'')+' '+(p.name||'').split(' ')[0]).trim(), sales:Number(p.sales), maxBill:Number(p.max_order), gender:p.gender
       }));
       renderBoard(rows);
     }
