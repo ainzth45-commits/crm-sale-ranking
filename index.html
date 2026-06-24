@@ -183,18 +183,24 @@
       const it = speakQueue.shift();
       tryAudio(it.t, it.g, 0);
     }
-    // เล่นจาก Edge Function + retry สูงสุด 2 ครั้ง → ถ้ายังพลาด fallback Web Speech → จบแล้วเล่นคิวถัดไป
+    // เล่นจาก Edge Function + WATCHDOG กันคิวค้าง: ถ้า 7 วิยังไม่ "เริ่มเล่นจริง" = ตัดทิ้ง → ลองใหม่ 1 ครั้ง → fallback Web Speech
+    // (สำคัญ: ถ้า Audio แฮงค์โหลด ไม่เคยยิง ended/error → playNext ไม่ถูกเรียก คิวจะค้างเป็นนาที — watchdog ตัดวงนี้)
     let curAudio = null;
     function tryAudio(t, g, attempt){
       const a = new Audio(TTS_URL + '?g=' + g + '&text=' + encodeURIComponent(toSpoken(t)));
       curAudio = a;
-      a.addEventListener('ended', () => { if(curAudio===a) playNext(); });
-      a.addEventListener('error', () => {
-        if(curAudio!==a) return;
-        if(attempt < 2){ setTimeout(() => { if(curAudio===a) tryAudio(t, g, attempt+1); }, 500); }
-        else webSpeak(t, g);            // edge-tts ล่ม → สำรอง
-      });
-      a.play().catch(() => { if(curAudio===a) webSpeak(t, g); });  // autoplay บล็อก → สำรอง
+      let done = false;
+      const wd = setTimeout(giveUp, 7000);   // 7 วิ ไม่เริ่มเล่น = ถือว่าค้าง
+      function giveUp(){
+        if(done || curAudio !== a) return; done = true; clearTimeout(wd);
+        try{ a.pause(); }catch(e){}
+        if(attempt < 1) tryAudio(t, g, attempt + 1);   // ลองใหม่อีก 1 ครั้ง (server มัก cache ผลจากรอบแรกไว้แล้ว → รอบ 2 มักเป็น hit เร็ว)
+        else webSpeak(t, g);                            // ยอมแพ้ → เสียงสำรองเบราว์เซอร์
+      }
+      a.addEventListener('playing', () => { clearTimeout(wd); });          // เริ่มเล่นจริง → ปลด watchdog
+      a.addEventListener('ended',   () => { if(curAudio===a){ done = true; clearTimeout(wd); playNext(); } });
+      a.addEventListener('error',   giveUp);
+      a.play().catch(giveUp);                                              // autoplay บล็อก / โหลดพลาด
     }
     // สำรอง: เสียงเบราว์เซอร์ (Web Speech) — ไม่เพราะเท่า แต่ได้ยินเสมอ
     function webSpeak(t, g){
