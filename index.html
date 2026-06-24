@@ -190,12 +190,14 @@
       const a = new Audio(TTS_URL + '?g=' + g + '&text=' + encodeURIComponent(toSpoken(t)));
       curAudio = a;
       let done = false;
-      const wd = setTimeout(giveUp, 7000);   // 7 วิ ไม่เริ่มเล่น = ถือว่าค้าง
+      // 10 วิ/ครั้ง: เผื่อ synth ครั้งแรก (cache miss ~5-10 วิ) เล่น neural ได้เลย · ลองได้ถึง 4 ครั้ง
+      // (สำคัญ: บน TV เล่น Web Speech ไม่ได้ → ต้องดันเสียง neural/MP3 ให้ติดให้ได้ · server cache ผล synth ไว้ → รอบถัดไปมัก hit เร็ว)
+      const wd = setTimeout(giveUp, 10000);
       function giveUp(){
         if(done || curAudio !== a) return; done = true; clearTimeout(wd);
         try{ a.pause(); }catch(e){}
-        if(attempt < 1) tryAudio(t, g, attempt + 1);   // ลองใหม่อีก 1 ครั้ง (server มัก cache ผลจากรอบแรกไว้แล้ว → รอบ 2 มักเป็น hit เร็ว)
-        else webSpeak(t, g);                            // ยอมแพ้ → เสียงสำรองเบราว์เซอร์
+        if(attempt < 3) tryAudio(t, g, attempt + 1);    // ลองดันเสียง neural ใหม่ (มักติด cache hit ในรอบถัดไป)
+        else webSpeak(t, g);                             // หมดทาง → Web Speech (เดสก์ท็อปได้ยิน · TV เงียบ แต่ไม่ค้างคิว)
       }
       a.addEventListener('playing', () => { clearTimeout(wd); });          // เริ่มเล่นจริง → ปลด watchdog
       a.addEventListener('ended',   () => { if(curAudio===a){ done = true; clearTimeout(wd); playNext(); } });
