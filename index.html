@@ -175,6 +175,7 @@
     function speak(text, gender){
       if(!audioUnlocked || !text) return;
       if(!voiceAllowed()) return;   // ช่วงเงียบ: พักเที่ยง 13:01–14:00 + เกิน 18:00 (รวมเสียงขึ้นที่ 1)
+      shakeRank1();                 // ทุกครั้งที่มีเสียง → อันดับ 1 สั่น
       speakQueue.push({ t: renderToken(text, gender), g: gender==='male'?'m':'f' });
       if(speakQueue.length > 2) speakQueue = speakQueue.slice(-2);   // drop-stale: เก็บล่าสุด 2
       if(!speaking) playNext();
@@ -420,6 +421,13 @@
       const el = document.querySelector('.rank-1-box .profile-container');
       if (el) el.classList.toggle('shake-active', isShaking);
     }
+    // สั่นรูปอันดับ 1 ทุกครั้งที่มีเสียงพูด · เสียงซ้อนกัน = รีเซ็ตเวลา 15 วิใหม่ (ไม่หยุดกลางคัน)
+    let shakeTimer = null;
+    function shakeRank1() {
+      isShaking = true; applyShake();
+      clearTimeout(shakeTimer);
+      shakeTimer = setTimeout(() => { isShaking = false; applyShake(); }, 15000);
+    }
 
     // ── ช่วงเล่นเสียง: เงียบพักเที่ยง 13:01–14:00 (13:00 ยังเล่น) + เกิน 18:00 เงียบทั้งหมด ──
     function voiceAllowed(now){
@@ -434,17 +442,15 @@
       var m = now.getMinutes(), t = now.getHours()*60 + m;
       return t <= 13*60 ? (m===0 || m===30) : (m===0 || m===20 || m===40);
     }
-    // นาฬิกานับถอยหลังถึง 18:00 + รูปอันดับ 1 สั่นตอนเล่นเสียง periodic
+    // นาฬิกานับถอยหลังถึง 18:00 + ยิงเสียง periodic ตามจังหวะ (การสั่นจัดการที่ speak → shakeRank1)
     function startTimer() {
       const timerEl = document.getElementById('timer');
       const now = new Date(), end = new Date(); end.setHours(18,0,0,0);
       let diff = end - now; if (diff < 0) diff = 0;
       const p = n => String(n).padStart(2,'0');
       if (timerEl) timerEl.innerText = `${p(Math.floor(diff/3600000))}:${p(Math.floor(diff%3600000/60000))}:${p(Math.floor(diff%60000/1000))}`;
-      if (now.getSeconds() === 0 && !isShaking && voiceAllowed(now) && isPeriodicMark(now)) {
-        isShaking = true; applyShake();
+      if (now.getSeconds() === 0 && voiceAllowed(now) && isPeriodicMark(now)) {
         speak(pick('periodic'), currentRank1Gender);   // เยาะเย้ยตามจังหวะ (30 นาที ก่อนเที่ยง / 20 นาที หลังบ่าย)
-        setTimeout(() => { isShaking = false; applyShake(); }, 15000);
       }
     }
   </script>
