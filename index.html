@@ -87,13 +87,24 @@
     #heroOverlay.on #heroWrap{ transform:scale(1); opacity:1; }
     #heroImg{ height:80vh; width:80vh; max-width:92vw; max-height:88vh; border-radius:50%; object-fit:cover;
       border:1.2vh solid rgba(255,212,80,.95); box-shadow:0 0 90px rgba(255,200,60,.65), 0 0 30px rgba(0,0,0,.5); }
-    #heroOverlay.laugh #heroImg{ animation:heroLaugh .3s ease-in-out infinite; }
+    #heroOverlay.laugh #heroImg{ animation:heroLaugh 2.2s ease-in-out infinite; }
+    /* หัวเราะเป็นชุดๆ: สั่นรัว → หยุดพัก → สั่นต่อ (ไม่สั่นรัวต่อเนื่อง = เป็นธรรมชาติ) */
     @keyframes heroLaugh{
-      0%{transform:rotate(-3.5deg) scale(1) translateY(0)}
-      25%{transform:rotate(3.5deg) scale(1.05) translateY(-1.8%)}
-      50%{transform:rotate(-2deg) scale(1) translateY(0)}
-      75%{transform:rotate(2.5deg) scale(1.05) translateY(-1.8%)}
-      100%{transform:rotate(-3.5deg) scale(1) translateY(0)}
+      0%,20%,40%,60%,82%,100%{ transform:rotate(0deg) scale(1) translateY(0); }   /* จังหวะหยุดพัก */
+      /* ชุด 1 (สั่นรัว) */
+      4%{ transform:rotate(-4deg) scale(1.05) translateY(-2%); }
+      8%{ transform:rotate(4deg)  scale(1.02) translateY(0); }
+      12%{ transform:rotate(-4deg) scale(1.05) translateY(-2%); }
+      16%{ transform:rotate(3deg)  scale(1.02) translateY(0); }
+      /* ชุด 2 (สั่นรัว แรงขึ้น) */
+      44%{ transform:rotate(4deg)  scale(1.06) translateY(-2.4%); }
+      48%{ transform:rotate(-4deg) scale(1.02) translateY(0); }
+      52%{ transform:rotate(4deg)  scale(1.06) translateY(-2.4%); }
+      56%{ transform:rotate(-3deg) scale(1.02) translateY(0); }
+      /* ชุด 3 (สั่นสั้นๆ) */
+      86%{ transform:rotate(-3deg) scale(1.04) translateY(-1.5%); }
+      90%{ transform:rotate(3deg)  scale(1.02) translateY(0); }
+      94%{ transform:rotate(-2deg) scale(1.03) translateY(0); }
     }
 
     .rank-2-3-container { flex-grow:1; display:flex; gap:2vw; height:40%; }
