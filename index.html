@@ -163,6 +163,7 @@
     let lastKey = "";
     let prevRanks = {};
     let prevMaxBill = 0;
+    let currentRank1Sales = 0;   // ยอดรวมของอันดับ 1 รอบก่อน — ใช้ตรวจ "ที่ 1 คนเดิมส่งงานเพิ่ม >2000"
 
     /* ═══════ เครื่องยนต์เสียงพากย์ (Edge Function tts) ═══════ */
     const TTS_URL = SB_URL + '/functions/v1/tts';
@@ -313,6 +314,8 @@
       const bigOrderNew = (prevMaxBill > 0 && maxBillValue > prevMaxBill);
       const bigOwner = bigOrderNew ? data.find(d => Number(d.maxBill) === maxBillValue) : null;
       const leaderChanged = (currentRank1Id !== "" && currentRank1Id !== r1.id);
+      // ที่ 1 คนเดิม ยอดรวมเพิ่มขึ้นเท่าไร (ส่งงานเพิ่มแต่ไม่มีใครให้แซง) · init/เปลี่ยนคน = 0
+      const r1SalesDelta = (currentRank1Id === r1.id) ? (Number(r1.sales) - currentRank1Sales) : 0;
       if (!rank1SinceMs) rank1SinceMs = Date.now();        // init ครั้งแรก
 
       if (leaderChanged) {
@@ -326,10 +329,13 @@
           speak(pick('newLeader'), g);                // ผู้นำคนใหม่ทั่วไป
         }
         rank1SinceMs = Date.now();
+      } else if (r1SalesDelta > 2000) {
+        speak(pick('no1Extend'), g);                  // ที่ 1 คนเดิมส่งงานเพิ่ม >2000 (ไม่มีใครให้แซง) → ชุดเสียงใหม่
       } else if (bigOrderNew) {
         speak(pick('bigOrderOther'), g);              // บิลใหญ่แต่ไม่แซงที่ 1
       }
       prevMaxBill = maxBillValue;
+      currentRank1Sales = Number(r1.sales) || 0;     // เก็บยอดที่ 1 ไว้เทียบรอบหน้า
       currentRank1Id = r1.id;
       currentRank1Name = r1.name;
       currentRank1Gender = g;
