@@ -78,6 +78,24 @@
     }
     .shake-active { animation:shake-animation .2s ease-in-out infinite !important; }
 
+    /* ═══ HERO: รูปอันดับ 1 เด้งมากลางจอ + ฉากหลังมืด + สั่นหัวเราะ (ตอนเสียงพร้อมเล่น) ═══ */
+    #heroOverlay{ position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,0); opacity:0; visibility:hidden; pointer-events:none;
+      transition:background .4s ease, opacity .4s ease, visibility .4s; }
+    #heroOverlay.on{ background:rgba(0,0,0,.74); opacity:1; visibility:visible; }
+    #heroWrap{ transform:scale(.25); opacity:0; transition:transform .5s cubic-bezier(.18,1.5,.4,1), opacity .4s ease; }
+    #heroOverlay.on #heroWrap{ transform:scale(1); opacity:1; }
+    #heroImg{ height:80vh; width:80vh; max-width:92vw; max-height:88vh; border-radius:50%; object-fit:cover;
+      border:1.2vh solid rgba(255,212,80,.95); box-shadow:0 0 90px rgba(255,200,60,.65), 0 0 30px rgba(0,0,0,.5); }
+    #heroOverlay.laugh #heroImg{ animation:heroLaugh .3s ease-in-out infinite; }
+    @keyframes heroLaugh{
+      0%{transform:rotate(-3.5deg) scale(1) translateY(0)}
+      25%{transform:rotate(3.5deg) scale(1.05) translateY(-1.8%)}
+      50%{transform:rotate(-2deg) scale(1) translateY(0)}
+      75%{transform:rotate(2.5deg) scale(1.05) translateY(-1.8%)}
+      100%{transform:rotate(-3.5deg) scale(1) translateY(0)}
+    }
+
     .rank-2-3-container { flex-grow:1; display:flex; gap:2vw; height:40%; }
     .rank-minor { flex:1; background:var(--card-bg); border-radius:3vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:1vh; border:0.2vh solid rgba(255,255,255,.12); transition:all .4s ease; overflow:hidden;
       box-shadow:0 1vh 2.5vh rgba(0,0,0,.35), inset 0 .3vh 1vh rgba(255,255,255,.06); }
@@ -175,7 +193,7 @@
     function speak(text, gender){
       if(!audioUnlocked || !text) return;
       if(!voiceAllowed()) return;   // ช่วงเงียบ: พักเที่ยง 13:01–14:00 + เกิน 18:00 (รวมเสียงขึ้นที่ 1)
-      shakeRank1();                 // ทุกครั้งที่มีเสียง → อันดับ 1 สั่น
+      // (เอฟเฟกต์ hero เด้งกลางจอ เรียกตอนเสียง "เริ่มเล่นจริง" ใน tryAudio/webSpeak ไม่ใช่ตอนนี้ — กันรูปเด้งก่อนเสียงมา)
       speakQueue.push({ t: renderToken(text, gender), g: gender==='male'?'m':'f' });
       if(speakQueue.length > 2) speakQueue = speakQueue.slice(-2);   // drop-stale: เก็บล่าสุด 2
       if(!speaking) playNext();
@@ -202,8 +220,8 @@
         if(attempt < 3) tryAudio(t, g, attempt + 1);    // ลองดันเสียง neural ใหม่ (มักติด cache hit ในรอบถัดไป)
         else webSpeak(t, g);                             // หมดทาง → Web Speech (เดสก์ท็อปได้ยิน · TV เงียบ แต่ไม่ค้างคิว)
       }
-      a.addEventListener('playing', () => { clearTimeout(wd); });          // เริ่มเล่นจริง → ปลด watchdog
-      a.addEventListener('ended',   () => { if(curAudio===a){ done = true; clearTimeout(wd); playNext(); } });
+      a.addEventListener('playing', () => { clearTimeout(wd); heroShow(); });   // เริ่มเล่นจริง → ปลด watchdog + เด้ง hero
+      a.addEventListener('ended',   () => { if(curAudio===a){ done = true; clearTimeout(wd); heroHideAfter(); playNext(); } });
       a.addEventListener('error',   giveUp);
       a.play().catch(giveUp);                                              // autoplay บล็อก / โหลดพลาด
     }
@@ -216,7 +234,8 @@
         u.lang = 'th-TH';
         const vs = speechSynthesis.getVoices().filter(v => (v.lang||'').toLowerCase().startsWith('th'));
         if(vs.length) u.voice = vs[g==='m' && vs.length>1 ? 1 : 0];
-        u.onend = u.onerror = () => playNext();
+        u.onstart = () => heroShow();
+        u.onend = u.onerror = () => { heroHideAfter(); playNext(); };
         speechSynthesis.speak(u);
       } catch(e){ playNext(); }
     }
@@ -416,17 +435,29 @@
         </div>`;
     }
 
-    // shake แยกจาก render → toggle class บน element สดๆ (ไม่ rebuild)
-    function applyShake() {
-      const el = document.querySelector('.rank-1-box .profile-container');
-      if (el) el.classList.toggle('shake-active', isShaking);
+    // ── HERO: รูปอันดับ 1 เด้งมากลางจอใหญ่ + ฉากหลังมืด + สั่นหัวเราะ (overlay แยกจาก render ไม่ rebuild) ──
+    let heroTimer = null;
+    function ensureHero(){
+      let ov = document.getElementById('heroOverlay');
+      if(!ov){ ov = document.createElement('div'); ov.id='heroOverlay';
+        ov.innerHTML = '<div id="heroWrap"><img id="heroImg" alt=""></div>';
+        document.body.appendChild(ov); }
+      return ov;
     }
-    // สั่นรูปอันดับ 1 ทุกครั้งที่มีเสียงพูด · เสียงซ้อนกัน = รีเซ็ตเวลา 15 วิใหม่ (ไม่หยุดกลางคัน)
-    let shakeTimer = null;
-    function shakeRank1() {
-      isShaking = true; applyShake();
-      clearTimeout(shakeTimer);
-      shakeTimer = setTimeout(() => { isShaking = false; applyShake(); }, 15000);
+    function heroShow(){
+      const ov = ensureHero();
+      const src = (document.querySelector('.rank-1-box img.profile')||{}).src;   // รูปอันดับ 1 ปัจจุบัน (คนพูด)
+      if(!src) return;
+      const im = document.getElementById('heroImg');
+      if(im.src !== src) im.src = src;
+      clearTimeout(heroTimer);                 // มีเสียงต่อเนื่อง = ยกเลิกคิวซ่อน คงค้างไว้
+      ov.classList.add('on');                  // เด้งเข้า + ฉากหลังมืด
+      setTimeout(() => ov.classList.add('laugh'), 360);   // หลังเด้งเข้าเสร็จ → เริ่มสั่นหัวเราะ
+    }
+    function heroHideAfter(){                   // เสียงจบ → รอ 3 วิ ค่อยเด้งกลับ
+      const ov = ensureHero();
+      clearTimeout(heroTimer);
+      heroTimer = setTimeout(() => { ov.classList.remove('laugh'); ov.classList.remove('on'); }, 3000);
     }
 
     // ── ช่วงเล่นเสียง: เงียบพักเที่ยง 13:01–14:00 (13:00 ยังเล่น) + เกิน 18:00 เงียบทั้งหมด ──
@@ -442,7 +473,7 @@
       var m = now.getMinutes(), t = now.getHours()*60 + m;
       return t <= 13*60 ? (m===0 || m===30) : (m===0 || m===20 || m===40);
     }
-    // นาฬิกานับถอยหลังถึง 18:00 + ยิงเสียง periodic ตามจังหวะ (การสั่นจัดการที่ speak → shakeRank1)
+    // นาฬิกานับถอยหลังถึง 18:00 + ยิงเสียง periodic ตามจังหวะ (เอฟเฟกต์ hero จัดการตอนเสียงเริ่มเล่นจริง → heroShow/heroHideAfter)
     function startTimer() {
       const timerEl = document.getElementById('timer');
       const now = new Date(), end = new Date(); end.setHours(18,0,0,0);
