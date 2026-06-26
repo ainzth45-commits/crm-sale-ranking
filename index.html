@@ -212,11 +212,11 @@
     function renderToken(t, gender){ return String(t).replace(/\{ญ:([^|]*)\|([^}]*)\}/g, (m,f,mm)=> gender==='male'?mm:f); }
     // เว้นวรรคในข้อความ → คอมมา เพื่อให้เสียง neural หยุดเว้นจังหวะตามข้อความ (พิสูจน์แล้วว่าเพิ่มการหยุดจริง)
     function toSpoken(t){ return String(t).trim().replace(/\s+/g, ', '); }
-    function speak(text, gender){
+    function speak(text, gender, hero=true){   // hero=false สำหรับเสียงที่ไม่ใช่การเยาะเย้ยของอันดับ 1 (เช่น welcome) → ไม่เด้ง hero
       if(!audioUnlocked || !text) return;
       if(!voiceAllowed()) return;   // ช่วงเงียบ: พักเที่ยง 13:01–14:00 + เกิน 18:00 (รวมเสียงขึ้นที่ 1)
       // (เอฟเฟกต์ hero เด้งกลางจอ เรียกตอนเสียง "เริ่มเล่นจริง" ใน tryAudio/webSpeak ไม่ใช่ตอนนี้ — กันรูปเด้งก่อนเสียงมา)
-      speakQueue.push({ t: renderToken(text, gender), g: gender==='male'?'m':'f' });
+      speakQueue.push({ t: renderToken(text, gender), g: gender==='male'?'m':'f', hero });
       if(speakQueue.length > 2) speakQueue = speakQueue.slice(-2);   // drop-stale: เก็บล่าสุด 2
       if(!speaking) playNext();
     }
@@ -224,12 +224,12 @@
       if(!speakQueue.length){ speaking=false; return; }
       speaking=true;
       const it = speakQueue.shift();
-      tryAudio(it.t, it.g, 0);
+      tryAudio(it.t, it.g, 0, it.hero);
     }
     // เล่นจาก Edge Function + WATCHDOG กันคิวค้าง: ถ้า 7 วิยังไม่ "เริ่มเล่นจริง" = ตัดทิ้ง → ลองใหม่ 1 ครั้ง → fallback Web Speech
     // (สำคัญ: ถ้า Audio แฮงค์โหลด ไม่เคยยิง ended/error → playNext ไม่ถูกเรียก คิวจะค้างเป็นนาที — watchdog ตัดวงนี้)
     let curAudio = null;
-    function tryAudio(t, g, attempt){
+    function tryAudio(t, g, attempt, hero){
       const a = new Audio(TTS_URL + '?g=' + g + '&text=' + encodeURIComponent(toSpoken(t)));
       curAudio = a;
       let done = false;
@@ -239,16 +239,16 @@
       function giveUp(){
         if(done || curAudio !== a) return; done = true; clearTimeout(wd);
         try{ a.pause(); }catch(e){}
-        if(attempt < 3) tryAudio(t, g, attempt + 1);    // ลองดันเสียง neural ใหม่ (มักติด cache hit ในรอบถัดไป)
-        else webSpeak(t, g);                             // หมดทาง → Web Speech (เดสก์ท็อปได้ยิน · TV เงียบ แต่ไม่ค้างคิว)
+        if(attempt < 3) tryAudio(t, g, attempt + 1, hero);    // ลองดันเสียง neural ใหม่ (มักติด cache hit ในรอบถัดไป)
+        else webSpeak(t, g, hero);                            // หมดทาง → Web Speech (เดสก์ท็อปได้ยิน · TV เงียบ แต่ไม่ค้างคิว)
       }
-      a.addEventListener('playing', () => { clearTimeout(wd); heroShow(); });   // เริ่มเล่นจริง → ปลด watchdog + เด้ง hero
-      a.addEventListener('ended',   () => { if(curAudio===a){ done = true; clearTimeout(wd); heroHideAfter(); playNext(); } });
+      a.addEventListener('playing', () => { clearTimeout(wd); if(hero) heroShow(); });   // เริ่มเล่นจริง → ปลด watchdog + เด้ง hero (เฉพาะเสียงเยาะเย้ย)
+      a.addEventListener('ended',   () => { if(curAudio===a){ done = true; clearTimeout(wd); if(hero) heroHideAfter(); playNext(); } });
       a.addEventListener('error',   giveUp);
       a.play().catch(giveUp);                                              // autoplay บล็อก / โหลดพลาด
     }
     // สำรอง: เสียงเบราว์เซอร์ (Web Speech) — ไม่เพราะเท่า แต่ได้ยินเสมอ
-    function webSpeak(t, g){
+    function webSpeak(t, g, hero){
       try {
         if(!('speechSynthesis' in window)) return playNext();
         speechSynthesis.cancel();
@@ -256,8 +256,8 @@
         u.lang = 'th-TH';
         const vs = speechSynthesis.getVoices().filter(v => (v.lang||'').toLowerCase().startsWith('th'));
         if(vs.length) u.voice = vs[g==='m' && vs.length>1 ? 1 : 0];
-        u.onstart = () => heroShow();
-        u.onend = u.onerror = () => { heroHideAfter(); playNext(); };
+        u.onstart = () => { if(hero) heroShow(); };
+        u.onend = u.onerror = () => { if(hero) heroHideAfter(); playNext(); };
         speechSynthesis.speak(u);
       } catch(e){ playNext(); }
     }
@@ -320,7 +320,7 @@
     function activateApp() {
       audioUnlocked = true;  // คลิกนี้คือ gesture ปลดล็อก autoplay
       loadTaunts();          // โหลดคลังข้อความจาก DB
-      speak('ยินดีต้อนรับสู่สนามแข่งยอดขาย เริ่มกันเลยค่ะ', 'female');  // เสียงต้อนรับ (เทสว่าเสียงทำงาน)
+      speak('ยินดีต้อนรับสู่สนามแข่งยอดขาย เริ่มกันเลยค่ะ', 'female', false);  // เสียงต้อนรับ (ไม่ใช่เยาะเย้ยอันดับ 1 → ไม่เด้ง hero)
       document.getElementById('overlay').style.opacity = '0';
       setTimeout(() => {
         document.getElementById('overlay').style.display = 'none';
@@ -476,10 +476,10 @@
       ov.classList.add('on');                  // เด้งเข้า + ฉากหลังมืด
       setTimeout(() => ov.classList.add('laugh'), 360);   // หลังเด้งเข้าเสร็จ → เริ่มสั่นหัวเราะ
     }
-    function heroHideAfter(){                   // เสียงจบ → รอ 3 วิ ค่อยเด้งกลับ
+    function heroHideAfter(){                   // เสียงจบ → รอ 2 วิ ค่อยเด้งกลับ
       const ov = ensureHero();
       clearTimeout(heroTimer);
-      heroTimer = setTimeout(() => { ov.classList.remove('laugh'); ov.classList.remove('on'); }, 3000);
+      heroTimer = setTimeout(() => { ov.classList.remove('laugh'); ov.classList.remove('on'); }, 2000);
     }
 
     // ── ช่วงเล่นเสียง: เงียบพักเที่ยง 13:01–14:00 (13:00 ยังเล่น) + เกิน 18:00 เงียบทั้งหมด ──
