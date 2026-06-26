@@ -268,16 +268,22 @@
     const PLAYED_KEY = 'tv_played_v1';
     let played = (()=>{ try{ return JSON.parse(localStorage.getItem(PLAYED_KEY)) || {}; }catch(e){ return {}; } })();
     function savePlayed(){ try{ localStorage.setItem(PLAYED_KEY, JSON.stringify(played)); }catch(e){} }
+    // หมวดที่ใช้คลังเสียงร่วมกัน (periodic + no1Extend = เสียงเยาะเย้ย/โอ้อวดอันดับ 1 → คลังเดียว นับไม่ซ้ำร่วมกัน)
+    const SHARED_POOLS = [['periodic','no1Extend']];
+    function poolFor(cat){
+      const grp = SHARED_POOLS.find(g => g.includes(cat)) || [cat];
+      return { key: grp.join('+'), pool: grp.flatMap(c => TAUNTS[c] || []) };
+    }
     function pick(cat){
-      const pool = TAUNTS[cat] || [];
+      const { key, pool } = poolFor(cat);
       if(!pool.length) return '';
-      let seen = (played[cat] || []).filter(t => pool.includes(t));    // ตัด text เก่าที่ไม่อยู่ในคลังแล้ว
+      let seen = (played[key] || []).filter(t => pool.includes(t));    // ตัด text เก่าที่ไม่อยู่ในคลังแล้ว
       let cand = pool.filter(t => !seen.includes(t));                  // ตัวที่ยังไม่เล่นรอบนี้
-      if(!cand.length){ seen = []; cand = pool.slice(); }              // เล่นครบหมวดนี้แล้ว → รีเซตเริ่มรอบใหม่
-      if(cand.length > 1 && lastPlayed[cat]) cand = cand.filter(t => t !== lastPlayed[cat]);  // กันซ้ำตัวล่าสุดคาบเกี่ยวรอบ
+      if(!cand.length){ seen = []; cand = pool.slice(); }              // เล่นครบคลังนี้แล้ว → รีเซตเริ่มรอบใหม่
+      if(cand.length > 1 && lastPlayed[key]) cand = cand.filter(t => t !== lastPlayed[key]);  // กันซ้ำตัวล่าสุดคาบเกี่ยวรอบ
       const t = cand[Math.floor(Math.random() * cand.length)];
-      played[cat] = seen.concat([t]);
-      lastPlayed[cat] = t;
+      played[key] = seen.concat([t]);
+      lastPlayed[key] = t;
       savePlayed();
       return t;
     }
