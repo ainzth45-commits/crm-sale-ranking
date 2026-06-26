@@ -263,18 +263,22 @@
     }
     // ── คลังข้อความดึงจาก Supabase (ตาราง taunts) + shuffle-bag กันเสียงซ้ำเร็ว ──
     let TAUNTS = {};            // {category: [text,...]} โหลดจาก DB
-    const bags = {}, lastPlayed = {};
-    function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-    // shuffle-bag: สับทั้งกอง เล่นจนครบก่อนสับใหม่ → ไม่ซ้ำจนกว่าจะวนครบ
+    const lastPlayed = {};
+    // จำเสียงที่เล่นไปแล้วต่อหมวดใน localStorage → ไม่เล่นซ้ำจนกว่าจะครบทุกข้อ แล้วรีเซต (จำข้ามรีเฟรช/ปิดเปิดจอ)
+    const PLAYED_KEY = 'tv_played_v1';
+    let played = (()=>{ try{ return JSON.parse(localStorage.getItem(PLAYED_KEY)) || {}; }catch(e){ return {}; } })();
+    function savePlayed(){ try{ localStorage.setItem(PLAYED_KEY, JSON.stringify(played)); }catch(e){} }
     function pick(cat){
       const pool = TAUNTS[cat] || [];
       if(!pool.length) return '';
-      if(!bags[cat] || !bags[cat].length){
-        bags[cat] = shuffle(pool);
-        if(bags[cat].length > 1 && bags[cat][0] === lastPlayed[cat]) bags[cat].push(bags[cat].shift()); // กันซ้ำคาบเกี่ยวรอบ
-      }
-      const t = bags[cat].shift();
+      let seen = (played[cat] || []).filter(t => pool.includes(t));    // ตัด text เก่าที่ไม่อยู่ในคลังแล้ว
+      let cand = pool.filter(t => !seen.includes(t));                  // ตัวที่ยังไม่เล่นรอบนี้
+      if(!cand.length){ seen = []; cand = pool.slice(); }              // เล่นครบหมวดนี้แล้ว → รีเซตเริ่มรอบใหม่
+      if(cand.length > 1 && lastPlayed[cat]) cand = cand.filter(t => t !== lastPlayed[cat]);  // กันซ้ำตัวล่าสุดคาบเกี่ยวรอบ
+      const t = cand[Math.floor(Math.random() * cand.length)];
+      played[cat] = seen.concat([t]);
       lastPlayed[cat] = t;
+      savePlayed();
       return t;
     }
     async function loadTaunts(){
@@ -282,8 +286,7 @@
       if(error){ console.error('taunts:', error); return; }
       const g = {};
       (data||[]).forEach(r => { (g[r.category] = g[r.category] || []).push(r.text); });
-      TAUNTS = g;
-      for(const k in bags) delete bags[k];   // reset shuffle-bag เมื่อคลังเปลี่ยน
+      TAUNTS = g;   // played (localStorage) คงไว้ข้ามการโหลด · ตัว pick กรอง text เก่าที่หายจากคลังเองแล้ว
       console.log('taunts loaded:', Object.fromEntries(Object.entries(g).map(([k,v])=>[k,v.length])));
     }
 
