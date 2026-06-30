@@ -499,6 +499,8 @@
       if (t > 13*60 && t <= 14*60) return false;  // 13:01–14:00 → เงียบ (13:00 ยังเล่น)
       return true;
     }
+    // ⏸️ ปิดเสียง periodic (ตามเวลา ครึ่งชม./20 นาที) ชั่วคราว — เปิดกลับเปลี่ยนเป็น true (เสียงตามเหตุการณ์ยังเล่นปกติ)
+    const PERIODIC_VOICE = false;
     // จังหวะเสียง periodic: ≤13:00 ทุกครึ่งชั่วโมง · หลัง 14:00 ทุก 20 นาที
     function isPeriodicMark(now){
       var m = now.getMinutes(), t = now.getHours()*60 + m;
@@ -511,7 +513,7 @@
       let diff = end - now; if (diff < 0) diff = 0;
       const p = n => String(n).padStart(2,'0');
       if (timerEl) timerEl.innerText = `${p(Math.floor(diff/3600000))}:${p(Math.floor(diff%3600000/60000))}:${p(Math.floor(diff%60000/1000))}`;
-      if (now.getSeconds() === 0 && voiceAllowed(now) && isPeriodicMark(now)) {
+      if (PERIODIC_VOICE && now.getSeconds() === 0 && voiceAllowed(now) && isPeriodicMark(now)) {
         speak(pick('periodic'), currentRank1Gender);   // เยาะเย้ยตามจังหวะ (30 นาที ก่อนเที่ยง / 20 นาที หลังบ่าย)
       }
     }
