@@ -203,7 +203,7 @@
     let lastKey = "";
     let prevRanks = {};
     let prevMaxBill = 0;
-    let currentRank1Sales = 0;   // ยอดรวมของอันดับ 1 รอบก่อน — ใช้ตรวจ "ที่ 1 คนเดิมส่งงานเพิ่ม >2000"
+    let currentRank1Sales = 0;   // ยอดรวมของอันดับ 1 รอบก่อน — ใช้ตรวจ "ที่ 1 คนเดิมส่งงานเพิ่ม 2500+"
 
     /* ═══════ เครื่องยนต์เสียงพากย์ (Edge Function tts) ═══════ */
     const TTS_URL = SB_URL + '/functions/v1/tts';
@@ -380,8 +380,8 @@
           speak(pick('newLeader'), g);                // ผู้นำคนใหม่ทั่วไป
         }
         rank1SinceMs = Date.now();
-      } else if (r1SalesDelta > 2000) {
-        speak(pick('no1Extend'), g);                  // ที่ 1 คนเดิมส่งงานเพิ่ม >2000 (ไม่มีใครให้แซง) → ชุดเสียงใหม่
+      } else if (r1SalesDelta >= 2500) {
+        speak(pick('no1Extend'), g);                  // ที่ 1 คนเดิมส่งงานเพิ่ม 2500+ (ไม่มีใครให้แซง) — เดิม >2000, เจ้านายปรับ 2026-07-08
       } else if (bigOrderNew) {
         speak(pick('bigOrderOther'), g);              // บิลใหญ่แต่ไม่แซงที่ 1
       }
